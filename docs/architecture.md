@@ -6,52 +6,53 @@
 
 ```mermaid
 graph TB
-    Client["🖥 Client"]
-    API["⚙️ API Server"]
-    DB["🗄 Database"]
-    Cache["⚡ Cache"]
+    Client["🖥 Web Client (React + AntDesign)"]
+    API["⚙️ FastAPI Backend"]
+    Auth["🔐 Casbin RBAC"]
+    DB["🗄 PostgreSQL (ltree, FTS)"]
+    S3["📦 MinIO (S3 Storage)"]
 
-    Client --> API
-    API --> DB
-    API --> Cache
+    Client -- API Requests --> API
+    Client -- Presigned URL PUT --> S3
+    API -- Read/Write --> DB
+    API -- Check Access --> Auth
+    API -- Generate Temp Link --> S3
 ```
-
-[TODO: Адаптировать диаграмму под проект]
 
 ## Тип архитектуры
 
-[TODO: Монолит / Микросервисы / Serverless / Гибрид]
+Монолитное ядро (FastAPI) с раздельным хранением объектов в S3. Используется **Isolated Schema Multi-Tenancy** (одна база данных, изолированные схемы (schema) для каждого арендатора). Контекст арендатора (tenant) определяется динамически через Middleware.
 
 ## Структура директорий
-
-```
-[TODO: Заполнить после определения стека]
-```
+Определяется в последующих фазах (frontend + backend codebases).
 
 ## Основные модули
 
 | Модуль | Ответственность | Зависимости |
 |--------|----------------|-------------|
-| [TODO] | [TODO] | [TODO] |
+| Middleware/Auth | Определение Tenant ID, JWT-проверка. | Pydantic, FastAPI. |
+| RBAC (Casbin) | Определение ролей (роли, привязанные к Tenant). | sqlalchemy, pycasbin. |
+| Pages Tree | Операции CRUD с \`ltree\`, построение иерархии (до 4 ур.). | PostgreSQL \`ltree\`. |
+| Search | Полнотекстовый поиск с гибридной фильтрацией. | Postgres FTS (\`tsvector\`). |
+| Media S3 | Генерация временных ссылок (Presigned URL) для загрузки/чтения медиа файлов. | boto3 / minio. |
 
-## Модель данных
+## Модель данных (Ключевые сущности)
 
 ```mermaid
 erDiagram
-    USER ||--o{ ORDER : places
-    USER {
+    TENANT ||--o{ PAGE : contains
+    PAGE ||--o{ PAGE : children_via_ltree
+    PAGE {
         int id PK
-        string email
-        string name
+        int tenant_id FK
+        string ltree_path "Путь узла"
+        tsvector search_vector "Полнотекст"
+        string slug "Кебаб-кейс URL"
     }
-    ORDER {
+    TENANT {
         int id PK
-        int user_id FK
-        datetime created_at
     }
 ```
-
-[TODO: Адаптировать под проект]
 
 ## API контракты
 
@@ -59,8 +60,9 @@ erDiagram
 
 | Метод | Путь | Описание | Auth |
 |-------|------|----------|------|
-| [TODO] | [TODO] | [TODO] | [TODO] |
+| GET | \`/api/v1/pages\` | Получить всё дерево страниц текущего tenant (treeData) | Да |
+| GET | \`/api/v1/pages/{{slug}}\` | Чтение конкретной документации | Да / Публ.Токен |
+| POST | \`/api/v1/media/upload-url\` | Получить Presigned URL MinIO | Да |
 
-## Аутентификация
-
-[TODO: JWT / OAuth / Session — описание flow]
+## Авторизация
+JWT Bearer 토кены. Разделение прав осуществляется с помощью Casbin pycasbin (Домены: tenant1, Роли: admin, editor, viewer).

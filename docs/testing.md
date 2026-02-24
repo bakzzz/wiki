@@ -5,49 +5,50 @@
 ## Стратегия
 
 ```
-        /  E2E  \           ← мало, критичные flows
-       / Integration \      ← API, DB-взаимодействия
-      /    Unit Tests    \   ← много, быстрые
+        /  E2E  \           ← Cypress (Проверка RBAC + Создание статьи + Рендер Mermaid)
+       / Integration \      ← API + DB interactions (Pytest) - Изоляция ltree операций
+      /    Unit Tests    \   ← Pytest (Backend Utils/Casbin), Jest (React Components)
 ```
 
 ## Инструменты
 
-| Тип | Инструмент | Конфиг |
+| Тип | Инструмент | Обоснование |
 |-----|-----------|--------|
-| Unit | [TODO: Jest/Pytest/etc.] | — |
-| Integration | [TODO] | — |
-| E2E | [TODO: Cypress/Playwright/etc.] | — |
-| Coverage | [TODO] | — |
-| Lint | [TODO: ESLint/Ruff/etc.] | — |
+| Unit (Front) | Jest + RTL | Проверка React-компонентов и Ant Design оберток |
+| Unit (Back) | Pytest | Валидация Pydantic, RBAC Casbin |
+| Integration | Pytest-asyncio | Тестирование FastAPI endpoints, загрузки файлов в Mock MinIO |
+| E2E | Cypress / Playwright | Проверка жизненного цикла: Логин -> Создание (Tiptap) -> Поиск (FTS) |
+| Lint | ESLint (Front) + Ruff (Back) | Анализ кода |
 
-## Coverage требования
+## Coverage требования (Критичные области)
 
-| Область | Минимум |
+| Область | Минимум (%) |
 |---------|---------|
-| Бизнес-логика | 80% |
-| API handlers | 70% |
-| Utilities | 60% |
-| UI компоненты | 50% |
+| Backend: Расчет Casbin политик (RBAC) | 90% |
+| Backend: Бизнес-логика (CRUD ltree) | 80% |
+| Backend: API Handlers | 70% |
+| Frontend: Компоненты UI | 50% |
+| Frontend: Утилиты (API клиенты) | 60% |
 
 ## Критичные тестовые сценарии
 
 | # | Сценарий | Тип | Приоритет |
 |---|----------|-----|-----------|
-| 1 | [TODO: Регистрация/Логин] | E2E | 🔴 |
-| 2 | [TODO] | Unit | 🟡 |
+| 1 | Регистрация/Логин и выдача JWT | E2E | 🔴 High |
+| 2 | Попытка доступа к чужой статье (разные Tenants) | E2E/Int | 🔴 High |
+| 3 | Рендеринг Tiptap редактора с Mermaid | Unit | 🟡 Med |
+| 4 | Работа FTS поиска (стемминг, совпадения) | Integration | 🔴 High |
 
 ## Команды
 
 ```bash
-# Unit тесты
-[TODO: npm test / pytest]
+# Frontend
+npm run test
+npm run lint
+npx cypress run
 
-# Coverage
-[TODO: npm run test:coverage]
-
-# E2E
-[TODO: npx cypress run]
-
-# Lint
-[TODO: npm run lint]
+# Backend
+pytest
+pytest --cov=app/
+ruff check .
 ```

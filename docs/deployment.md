@@ -2,78 +2,46 @@
 
 > Обновлено: 2026-02-24
 
+## Серверная инфраструктура
+
+Согласно требованиям: **обычный сервер компании (VPS/VDS)**. Отсутствуют облачные оркестраторы (типа K8s) на данном этапе.
+
+| Компонент | Спецификация | Контейнер Docker |
+|-----------|-------------|------------------|
+| Nginx/Traefik | Reverse Proxy, SSL | \`nginx:alpine\` |
+| Frontend React | Static Build (serve) | \`nginx:alpine\` (serve /usr/share/nginx/html) |
+| Backend API | FastAPI (Uvicorn/Gunicorn)| \`python:3.10-slim\` |
+| PostgreSQL | Database (Persistent DB) | \`postgres:15-alpine\` |
+| MinIO S3 | Object Storage | \`minio/minio\` |
+
 ## Git
 
 ### Репозиторий
-- Платформа: [TODO: GitHub / GitLab / Bitbucket]
-- URL: [TODO]
-- Видимость: [TODO: Private / Public]
+- Платформа: [GitHub](https://github.com/bakzzz/wiki)
+- Видимость: Private
 
-### Branching Strategy
-
-```
-main (production)
- └── develop (staging)
-      ├── feature/xxx
-      ├── fix/xxx
-      └── hotfix/xxx
-```
+### Branching Strategy (Git Flow / GitHub Flow)
+Основная ветка - `main` (production). Фичи разрабатываются в ветках `feature/*` и затем создается PR (Pull Request) или прямой мерж, если локальная разработка.
 
 ### Коммиты
-
 Формат: `type(scope): описание`
-
 Типы: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`
-
-### Code Review
-
-- [TODO: Обязательный review? Сколько approvals?]
 
 ## CI/CD Pipeline
 
-```mermaid
-graph LR
-    Push["Push"] --> Lint["Lint"]
-    Lint --> Test["Test"]
-    Test --> Build["Build"]
-    Build --> Deploy["Deploy"]
-```
-
-### Stages
-
-| Stage | Инструмент | Триггер |
-|-------|-----------|---------|
-| Lint | [TODO] | Push |
-| Test | [TODO] | Push |
-| Build | [TODO] | Merge to develop |
-| Deploy staging | [TODO] | Merge to develop |
-| Deploy production | [TODO] | Merge to main |
-
-## Серверная инфраструктура
-
-| Компонент | Сервис | Спецификация |
-|-----------|--------|-------------|
-| App server | [TODO] | — |
-| DB server | [TODO] | — |
-| CDN | [TODO] | — |
-| DNS | [TODO] | — |
+Рекомендуется использование GitHub Actions:
+1. **Lint** (Pytest ruff, ESLint).
+2. **Build** (собрать React bundle, собрать Docker image для бэкенда).
+3. **Deploy** (выполнить \`docker-compose up -d --build\` на целевом сервере).
 
 ## Домен и SSL
-
-- Домен: [TODO]
-- SSL: [TODO: Let's Encrypt / Cloudflare / etc.]
+- Разворачивание по стандартным портам Nginx (80/443).
+- SSL: Выпускается через certbot / Let's Encrypt (или предоставляется инфраструктурой DaFanasev-server).
 
 ## Мониторинг
 
 | Что | Инструмент |
 |-----|-----------|
-| Uptime | [TODO] |
-| Errors | [TODO: Sentry / etc.] |
-| Logs | [TODO] |
-| Metrics | [TODO] |
-
-## Переменные окружения
-
-| Переменная | Описание | Обязательна |
-|-----------|----------|-------------|
-| [TODO] | [TODO] | Да |
+| Logs Backend | Сбор stdout docker контейнеров (docker logs) |
+| Metrics (Future) | Prometheus + Grafana |
+| Errors Front | Sentry (Опционально) |

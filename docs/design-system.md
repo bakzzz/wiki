@@ -2,54 +2,37 @@
 
 > Обновлено: 2026-02-24
 
-## Цветовая палитра
+**КРИТИЧЕСКОЕ ПРАВИЛО:** Работа по Frontend СТРОГО и ИСКЛЮЧИТЕЛЬНО в рамках **Ant Design 5.x**. Кастомный CSS (`.css`, `.scss`, Tailwind, styled-components) применять только в крайнем случае, когда Ant Design физически не имеет нужного компонента.
 
-| Роль | Цвет | HEX | Применение |
-|------|------|-----|------------|
-| Primary | [TODO] | #000000 | Основной акцент |
-| Secondary | [TODO] | #000000 | Второстепенный |
-| Background | [TODO] | #000000 | Фон |
-| Surface | [TODO] | #000000 | Карточки, панели |
-| Text | [TODO] | #000000 | Основной текст |
-| Error | [TODO] | #000000 | Ошибки |
-| Success | [TODO] | #000000 | Успех |
+## Цветовая палитра (через Design Tokens AntD)
+
+Цвета и стиль настраиваются через `ConfigProvider` и `theme` Ant Design. Мультиарендность позволяет арендаторам кастомизировать бренд-цвета.
+
+| Роль (Token) | Применение |
+|------|------------|
+| \`colorPrimary\` | Основной акцент бренда |
+| \`colorBgContainer\` | Фон компонентов (карточек) |
+| \`colorBgLayout\` | Общий фон портала |
+| \`colorText\` | Основной текст статей |
 
 ## Типографика
+Используется типографика Ant Design (`Typography.Title`, `Typography.Paragraph`, `Typography.Text`).
 
-| Роль | Шрифт | Размер | Вес |
-|------|-------|--------|-----|
-| Heading 1 | [TODO] | 32px | 700 |
-| Heading 2 | [TODO] | 24px | 600 |
-| Body | [TODO] | 16px | 400 |
-| Caption | [TODO] | 14px | 400 |
-| Small | [TODO] | 12px | 400 |
-
-## Spacing
-
-Базис: 4px
-
-| Токен | Значение | Применение |
-|-------|----------|------------|
-| xs | 4px | Минимальный |
-| sm | 8px | Компактный |
-| md | 16px | Стандартный |
-| lg | 24px | Разделение секций |
-| xl | 32px | Максимальный |
-
-## Breakpoints
-
-| Имя | Значение | Устройство |
-|-----|----------|------------|
-| sm | 640px | Мобильный |
-| md | 768px | Планшет |
-| lg | 1024px | Десктоп |
-| xl | 1280px | Широкий |
+## Spacing & Layout
+Использовать только:
+- Контейнеры \`Layout\`, \`Space\`
+- Списки \`Grid\` (Row, Col) или \`Flex\` из Ant Design.
+- **Запрещены** хардкод `margin` или `padding` через стили, если можно использовать `Space`.
 
 ## Компоненты UI
 
-[TODO: Основные компоненты — кнопки, формы, карточки, навигация]
+- Дерево документов (Navigation): `Tree` / `DirectoryTree`
+- Поиск: `Input.Search`
+- Сообщения: `message` / `notification`
+- Хлебные крошки: `Breadcrumb`
+- Таблицы (для реестров/админки): `Table`
 
 ## Ссылки
 
-- Figma: [TODO]
-- Референсы: [TODO]
+- Официальная документация: [https://ant.design/docs/react/introduce](https://ant.design/docs/react/introduce)
+- Theme Configuration: [https://ant.design/docs/react/customize-theme](https://ant.design/docs/react/customize-theme)
