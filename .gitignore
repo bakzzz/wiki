@@ -1,0 +1,32 @@
+# Secrets
+08_SECRETS.md
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+.next/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*~
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
