@@ -39,6 +39,9 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     all_users = count_result.scalars().all()
     is_first = len(all_users) == 0
 
+    if not is_first:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Public registration is disabled. Administrator must create accounts via the control panel.")
+
     user = User(
         email=user_data.email,
         hashed_password=get_password_hash(user_data.password),
