@@ -1,0 +1,152 @@
+@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Atkinson Hyperlegible', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background 0.3s, color 0.3s;
+}
+
+[data-theme='light'] body,
+body {
+  background: #F8FBFF;
+  color: #404040;
+}
+
+[data-theme='dark'] body {
+  background: #000;
+  color: #e0e0e0;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #C5D3E0;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9AB5CD;
+}
+
+[data-theme='dark'] ::-webkit-scrollbar-thumb {
+  background: #444;
+}
+
+/* ── Selection ── */
+::selection {
+  background: rgba(22, 119, 255, 0.15);
+}
+
+/* ── Tiptap editor styling ── */
+.tiptap {
+  outline: none;
+  min-height: 350px;
+  width: 100%;
+}
+
+.tiptap p {
+  margin-bottom: 0.75em;
+  line-height: 1.7;
+}
+
+.tiptap h1,
+.tiptap h2,
+.tiptap h3 {
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+}
+
+.tiptap ul,
+.tiptap ol {
+  padding-left: 1.5em;
+  margin-bottom: 0.75em;
+}
+
+.tiptap blockquote {
+  border-left: 3px solid #CCE1F4;
+  padding-left: 1em;
+  margin-left: 0;
+  color: #666;
+}
+
+.tiptap code {
+  background: #EAF5FF;
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+[data-theme='dark'] .tiptap code {
+  background: #1f1f1f;
+}
+
+.tiptap pre {
+  background: #1E293B;
+  color: #E2E8F0;
+  padding: 1em;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin-bottom: 0.75em;
+}
+
+.ProseMirror {
+  outline: none;
+  min-height: 350px;
+  width: 100%;
+}
+
+.ProseMirror:focus {
+  outline: none;
+}
+
+.ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 8px 0;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+}
+
+.ProseMirror img.ProseMirror-selectednode {
+  outline: 2px solid #1677FF;
+}
+
+.ProseMirror a {
+  color: #1677FF;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.ProseMirror u {
+  text-decoration: underline;
+}
+
+/* ── Ant overrides ── */
+.ant-btn-primary {
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.ant-table-thead>tr>th {
+  font-weight: 600;
+}
