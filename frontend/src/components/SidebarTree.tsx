@@ -14,6 +14,24 @@ interface PageTreeItem {
     children: PageTreeItem[];
 }
 
+const generateSlug = (text: string) => {
+    const cyrillicToLatin: Record<string, string> = {
+        'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e', 'ж': 'zh',
+        'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o',
+        'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'h', 'ц': 'ts',
+        'ч': 'ch', 'ш': 'sh', 'щ': 'sch', 'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu',
+        'я': 'ya',
+    };
+    return text
+        .toLowerCase()
+        .split('')
+        .map(char => cyrillicToLatin[char] || char)
+        .join('')
+        .replace(/[^a-z0-9_]/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_|_$/g, '');
+};
+
 // Flatten tree to get all pages for parent selector
 const flattenTree = (items: PageTreeItem[]): PageTreeItem[] => {
     const result: PageTreeItem[] = [];
@@ -132,7 +150,14 @@ const SidebarTree: React.FC<SidebarTreeProps> = ({ onSelect, selectedPageId, can
             >
                 <Form form={form} layout="vertical" onFinish={handleCreate}>
                     <Form.Item name="title" label="Заголовок" rules={[{ required: true, message: 'Введите заголовок' }]}>
-                        <Input placeholder="Моя страница" />
+                        <Input
+                            placeholder="Моя страница"
+                            onChange={(e) => {
+                                if (!form.isFieldTouched('slug')) {
+                                    form.setFieldValue('slug', generateSlug(e.target.value));
+                                }
+                            }}
+                        />
                     </Form.Item>
                     <Form.Item
                         name="slug"

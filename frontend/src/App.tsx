@@ -5,6 +5,7 @@ import { useAuth } from './contexts/AuthContext';
 import { RoomProvider, useRoom } from './contexts/RoomContext';
 import SidebarTree from './components/SidebarTree';
 import Editor from './components/Editor';
+import Dashboard from './components/Dashboard';
 import SearchBar from './components/SearchBar';
 import LoginPage from './components/LoginPage';
 import AdminPanel from './components/AdminPanel';
@@ -114,7 +115,11 @@ const WikiApp: React.FC = () => {
           overflow: 'auto',
           height: 'calc(100vh - 56px)',
         }}>
-          <Editor pageId={selectedPageId} onPageDeleted={handlePageDeleted} canEdit={canEdit} />
+          {selectedPageId ? (
+            <Editor pageId={selectedPageId} onPageDeleted={handlePageDeleted} canEdit={canEdit} />
+          ) : (
+            <Dashboard />
+          )}
         </Content>
       </Layout>
     </Layout>
