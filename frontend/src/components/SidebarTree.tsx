@@ -2,7 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { Tree, Empty, Spin, Button, Modal, Form, Input, Select, message } from 'antd';
 import Icon from './Icon';
 import type { TreeDataNode } from 'antd';
-import { API_BASE_URL } from '../config';
+import { API_BASE_URL, tenantHeaders } from '../config';
+import { useAuth } from '../contexts/AuthContext';
+import { useRoom } from '../contexts/RoomContext';
 
 interface PageTreeItem {
     id: number;
@@ -39,6 +41,9 @@ interface SidebarTreeProps {
 }
 
 const SidebarTree: React.FC<SidebarTreeProps> = ({ onSelect, selectedPageId, canEdit = true }) => {
+    const { token } = useAuth();
+    const { currentRoom } = useRoom();
+
     const [treeData, setTreeData] = useState<TreeDataNode[]>([]);
     const [rawData, setRawData] = useState<PageTreeItem[]>([]);
     const [loading, setLoading] = useState(true);
@@ -48,7 +53,9 @@ const SidebarTree: React.FC<SidebarTreeProps> = ({ onSelect, selectedPageId, can
 
     const loadTree = () => {
         setLoading(true);
-        fetch(`${API_BASE_URL}/api/v1/pages/tree`)
+        fetch(`${API_BASE_URL}/api/v1/pages/tree`, {
+            headers: tenantHeaders(token, currentRoom)
+        })
             .then(res => res.json())
             .then(data => {
                 if (Array.isArray(data)) {
@@ -70,7 +77,7 @@ const SidebarTree: React.FC<SidebarTreeProps> = ({ onSelect, selectedPageId, can
 
             const res = await fetch(`${API_BASE_URL}/api/v1/pages/`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: tenantHeaders(token, currentRoom),
                 body: JSON.stringify(body),
             });
             if (res.ok) {

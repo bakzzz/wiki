@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Input, List, Typography, Popover } from 'antd';
-import { API_BASE_URL } from '../config';
+import { API_BASE_URL, tenantHeaders } from '../config';
+import { useAuth } from '../contexts/AuthContext';
+import { useRoom } from '../contexts/RoomContext';
 
 const { Text } = Typography;
 
@@ -18,6 +20,8 @@ interface SearchBarProps {
 }
 
 const SearchBar: React.FC<SearchBarProps> = ({ onSelect }) => {
+    const { token } = useAuth();
+    const { currentRoom } = useRoom();
     const [results, setResults] = useState<SearchResult[]>([]);
     const [loading, setLoading] = useState(false);
     const [open, setOpen] = useState(false);
@@ -30,7 +34,9 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSelect }) => {
         }
         setLoading(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/api/v1/search?q=${encodeURIComponent(value)}`);
+            const res = await fetch(`${API_BASE_URL}/api/v1/search?q=${encodeURIComponent(value)}`, {
+                headers: tenantHeaders(token, currentRoom)
+            });
             const data = await res.json();
             setResults(data.results || []);
             setOpen(true);

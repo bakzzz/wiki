@@ -7,8 +7,10 @@ import TextAlign from '@tiptap/extension-text-align';
 import Link from '@tiptap/extension-link';
 import { Button, Space, message, Typography, Spin, Divider, Popconfirm, theme } from 'antd';
 import Icon from './Icon';
-import { API_BASE_URL } from '../config';
+import { API_BASE_URL, tenantHeaders } from '../config';
 import Toolbar from './Toolbar';
+import { useAuth } from '../contexts/AuthContext';
+import { useRoom } from '../contexts/RoomContext';
 
 const { Title, Text } = Typography;
 
@@ -26,10 +28,11 @@ interface EditorProps {
     canEdit?: boolean;
 }
 
-const uploadImageToMinIO = async (file: File): Promise<string | null> => {
+const uploadImageToMinIO = async (file: File, token: string | null, room: string): Promise<string | null> => {
     try {
         const res = await fetch(`${API_BASE_URL}/api/v1/media/upload-url?filename=${encodeURIComponent(file.name)}`, {
             method: 'POST',
+            headers: tenantHeaders(token, room),
         });
         const { upload_url, object_key } = await res.json();
 
@@ -39,7 +42,9 @@ const uploadImageToMinIO = async (file: File): Promise<string | null> => {
             headers: { 'Content-Type': file.type },
         });
 
-        const dlRes = await fetch(`${API_BASE_URL}/api/v1/media/download-url?object_key=${encodeURIComponent(object_key)}`);
+        const dlRes = await fetch(`${API_BASE_URL}/api/v1/media/download-url?object_key=${encodeURIComponent(object_key)}`, {
+            headers: tenantHeaders(token, room),
+        });
         const { download_url } = await dlRes.json();
         return download_url;
     } catch {
@@ -48,7 +53,10 @@ const uploadImageToMinIO = async (file: File): Promise<string | null> => {
 };
 
 const Editor: React.FC<EditorProps> = ({ pageId, onPageDeleted, canEdit = true }) => {
-    const { token } = theme.useToken();
+    const { token: themeToken } = theme.useToken();
+    const { token } = useAuth();
+    const { currentRoom } = useRoom();
+
     const [page, setPage] = useState<PageData | null>(null);
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -72,7 +80,7 @@ const Editor: React.FC<EditorProps> = ({ pageId, onPageDeleted, canEdit = true }
                 event.preventDefault();
                 files.forEach(async (file) => {
                     message.loading({ content: `Uploading ${file.name}...`, key: file.name });
-                    const url = await uploadImageToMinIO(file);
+                    const url = await uploadImageToMinIO(file, token, currentRoom);
                     if (url) {
                         const { schema } = view.state;
                         const node = schema.nodes.image.create({ src: url });
@@ -100,7 +108,7 @@ const Editor: React.FC<EditorProps> = ({ pageId, onPageDeleted, canEdit = true }
                     const file = item.getAsFile();
                     if (!file) return;
                     message.loading({ content: 'Uploading pasted image...', key: 'paste' });
-                    const url = await uploadImageToMinIO(file);
+                    const url = await uploadImageToMinIO(file, token, currentRoom);
                     if (url) {
                         message.success({ content: 'Image pasted!', key: 'paste' });
                         // Insert via transaction
@@ -125,7 +133,9 @@ const Editor: React.FC<EditorProps> = ({ pageId, onPageDeleted, canEdit = true }
     const loadPage = useCallback(async (id: number) => {
         setLoading(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/api/v1/pages/${id}`);
+            const res = await fetch(`${API_BASE_URL}/api/v1/pages/${id}`, {
+                headers: tenantHeaders(token, currentRoom),
+            });
             if (res.ok) {
                 const data = await res.json();
                 setPage(data);
@@ -159,7 +169,7 @@ const Editor: React.FC<EditorProps> = ({ pageId, onPageDeleted, canEdit = true }
             const html = editor.getHTML();
             const res = await fetch(`${API_BASE_URL}/api/v1/pages/${page.id}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: tenantHeaders(token, currentRoom),
                 body: JSON.stringify({ content: html }),
             });
             if (res.ok) {
@@ -177,7 +187,10 @@ const Editor: React.FC<EditorProps> = ({ pageId, onPageDeleted, canEdit = true }
     const handleDelete = async () => {
         if (!page) return;
         try {
-            const res = await fetch(`${API_BASE_URL}/api/v1/pages/${page.id}`, { method: 'DELETE' });
+            const res = await fetch(`${API_BASE_URL}/api/v1/pages/${page.id}`, {
+                method: 'DELETE',
+                headers: tenantHeaders(token, currentRoom)
+            });
             if (res.ok) {
                 message.success('Страница удалена');
                 setPage(null);
@@ -217,10 +230,10 @@ const Editor: React.FC<EditorProps> = ({ pageId, onPageDeleted, canEdit = true }
                 </>
             )}
             <div style={{
-                border: `1px solid ${token.colorBorderSecondary}`,
-                borderRadius: token.borderRadius,
+                border: `1px solid ${themeToken.colorBorderSecondary}`,
+                borderRadius: themeToken.borderRadius,
                 overflow: 'hidden',
-                background: token.colorBgContainer,
+                background: themeToken.colorBgContainer,
                 width: '100%',
             }}>
                 {canEdit && <Toolbar editor={editor} />}
