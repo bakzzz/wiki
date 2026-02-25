@@ -78,6 +78,11 @@ async def create_room(
         text("INSERT INTO user_rooms (user_id, room_name, role) VALUES (:uid, :rn, 'Owner')"),
         {"uid": current_user.id, "rn": room.name},
     )
+    
+    # Create isolated schema and pages table for the new room
+    await db.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{room.name}"'))
+    await db.execute(text(f'CREATE TABLE IF NOT EXISTS "{room.name}".pages (LIKE public.pages INCLUDING ALL)'))
+    
     await db.commit()
     return {"name": room.name, "display_name": room.display_name, "public_slug": slug, "logo_url": None}
 
@@ -98,6 +103,7 @@ async def delete_room(
             raise HTTPException(status_code=403, detail="Only Owner can delete room")
     await db.execute(text(f"DELETE FROM {ROOMS_TABLE} WHERE name = :n"), {"n": room_name})
     await db.execute(text("DELETE FROM user_rooms WHERE room_name = :rn"), {"rn": room_name})
+    await db.execute(text(f'DROP SCHEMA IF EXISTS "{room_name}" CASCADE'))
     await db.commit()
     return {"detail": "Room deleted"}
 
