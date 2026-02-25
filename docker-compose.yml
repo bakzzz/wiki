@@ -45,6 +45,16 @@ services:
     depends_on:
       - db
       - minio
+    networks:
+      - default
+      - traefik-public
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-public"
+      - "traefik.http.routers.wiki-backend.rule=Host(`wiki.chromaton.ru`) && PathPrefix(`/api`, `/docs`, `/openapi.json`, `/media`)"
+      - "traefik.http.routers.wiki-backend.entrypoints=websecure"
+      - "traefik.http.routers.wiki-backend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.wiki-backend.loadbalancer.server.port=8000"
     restart: unless-stopped
 
   frontend:
@@ -61,8 +71,25 @@ services:
       - /app/node_modules
     depends_on:
       - backend
+    networks:
+      - default
+      - traefik-public
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-public"
+      - "traefik.http.routers.wiki-frontend.rule=Host(`wiki.chromaton.ru`)"
+      - "traefik.http.routers.wiki-frontend.entrypoints=websecure"
+      - "traefik.http.routers.wiki-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.wiki-frontend.loadbalancer.server.port=5173"
     restart: unless-stopped
 
 volumes:
   postgres_data:
   minio_data:
+
+
+networks:
+  default:
+  traefik-public:
+    external: true
+    name: traefik-public
