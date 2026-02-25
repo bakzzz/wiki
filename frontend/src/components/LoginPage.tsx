@@ -68,8 +68,14 @@ const LoginPage: React.FC = () => {
         }}>
             <Card style={{ width: 420, boxShadow: token.boxShadowSecondary }}>
                 <div style={{ textAlign: 'center', marginBottom: 24 }}>
-                    <Title level={2} style={{ margin: 0, color: token.colorPrimary }}>Wiki</Title>
-                    <Text type="secondary">База знаний</Text>
+                    <img
+                        src="/logo.svg"
+                        alt="Wiki Logo"
+                        style={{ height: 48, width: 'auto', marginBottom: 8 }}
+                    />
+                    <div>
+                        <Text type="secondary">База знаний</Text>
+                    </div>
                 </div>
                 <Tabs items={items} centered />
             </Card>
