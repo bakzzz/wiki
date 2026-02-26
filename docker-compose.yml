@@ -5,21 +5,26 @@ services:
     image: postgres:15-alpine
     container_name: wiki_db
     environment:
-      POSTGRES_USER: wiki_user
-      POSTGRES_PASSWORD: wiki_password
-      POSTGRES_DB: wiki_db
+      POSTGRES_USER: ${POSTGRES_USER:-wiki_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-default_password}
+      POSTGRES_DB: ${POSTGRES_DB:-wiki_db}
     ports:
       - "5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U wiki_user -d wiki_db" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
 
   minio:
     image: minio/minio
     container_name: wiki_minio
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin123
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
     ports:
       - "9003:9000"
       - "9004:9001"
@@ -36,12 +41,13 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://wiki_user:wiki_password@db:5432/wiki_db
-      - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=minioadmin
-      - MINIO_SECRET_KEY=minioadmin123
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://wiki_user:default_password@db:5432/wiki_db}
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin123}
     volumes:
       - ./backend:/app
+      - media_data:/app/media
     depends_on:
       - db
       - minio
@@ -55,6 +61,11 @@ services:
       - "traefik.http.routers.wiki-backend.entrypoints=websecure"
       - "traefik.http.routers.wiki-backend.tls.certresolver=letsencrypt"
       - "traefik.http.services.wiki-backend.loadbalancer.server.port=8000"
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
 
   frontend:
@@ -86,6 +97,7 @@ services:
 volumes:
   postgres_data:
   minio_data:
+  media_data:
 
 
 networks:

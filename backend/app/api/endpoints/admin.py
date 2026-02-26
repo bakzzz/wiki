@@ -1,3 +1,4 @@
+import logging
 import uuid
 import os
 import shutil
@@ -12,6 +13,9 @@ from app.api.deps import get_db, get_current_user
 from app.core.security import get_password_hash
 from app.models.user import User
 from app.schemas.user import UserResponse, RoomCreate, RoomResponse
+from pydantic import BaseModel as _BM
+
+logger = logging.getLogger("wiki.admin")
 
 router = APIRouter()
 
@@ -19,14 +23,28 @@ ROOMS_TABLE = "wiki_rooms"
 LOGOS_DIR = Path(__file__).resolve().parents[3] / "media" / "logos"
 
 
+DEFAULT_LOGO_PATH = LOGOS_DIR / "default_logo"
+
+
 async def _ensure_tables(db: AsyncSession):
     await db.execute(text(
         f"CREATE TABLE IF NOT EXISTS {ROOMS_TABLE} ("
         f"  name VARCHAR PRIMARY KEY, "
         f"  display_name VARCHAR NOT NULL, "
-        f"  public_slug VARCHAR UNIQUE"
+        f"  public_slug VARCHAR UNIQUE, "
+        f"  logo_url VARCHAR, "
+        f"  welcome_page_id INTEGER"
         f")"
     ))
+    # Ensure columns exist for older installations
+    try:
+        await db.execute(text(f"ALTER TABLE {ROOMS_TABLE} ADD COLUMN IF NOT EXISTS logo_url VARCHAR"))
+        await db.execute(text(f"ALTER TABLE {ROOMS_TABLE} ADD COLUMN IF NOT EXISTS public_slug VARCHAR UNIQUE"))
+        await db.execute(text(f"ALTER TABLE {ROOMS_TABLE} ADD COLUMN IF NOT EXISTS welcome_page_id INTEGER"))
+        await db.execute(text(f"ALTER TABLE {ROOMS_TABLE} ADD COLUMN IF NOT EXISTS public_title VARCHAR DEFAULT ''"))
+        await db.execute(text(f"ALTER TABLE {ROOMS_TABLE} ADD COLUMN IF NOT EXISTS public_subtitle VARCHAR DEFAULT ''"))
+    except Exception as e:
+        logger.warning("Column migration skipped: %s", e)
     await db.execute(text(
         "CREATE TABLE IF NOT EXISTS user_rooms ("
         "  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, "
@@ -34,6 +52,20 @@ async def _ensure_tables(db: AsyncSession):
         "  role VARCHAR DEFAULT 'Viewer', "
         "  PRIMARY KEY (user_id, room_name)"
         ")"
+    ))
+    # Feedback table (public schema)
+    await db.execute(text(
+        "CREATE TABLE IF NOT EXISTS feedback ("
+        "  id SERIAL PRIMARY KEY, "
+        "  room_name VARCHAR(100) NOT NULL, "
+        "  text TEXT NOT NULL, "
+        "  author_name VARCHAR(200) NOT NULL DEFAULT '', "
+        "  author_org VARCHAR(200) NOT NULL DEFAULT '', "
+        "  created_at TIMESTAMPTZ NOT NULL DEFAULT now()"
+        ")"
+    ))
+    await db.execute(text(
+        "CREATE INDEX IF NOT EXISTS idx_feedback_room ON feedback (room_name)"
     ))
     await db.commit()
 
@@ -45,17 +77,19 @@ async def list_rooms(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _ensure_tables(db)
-    try:
-        await db.execute(text(f"ALTER TABLE {ROOMS_TABLE} ADD COLUMN IF NOT EXISTS public_slug VARCHAR UNIQUE"))
-        await db.execute(text(f"ALTER TABLE {ROOMS_TABLE} ADD COLUMN IF NOT EXISTS logo_url VARCHAR"))
-        await db.commit()
-    except Exception:
-        pass
-
-    result = await db.execute(text(f"SELECT name, display_name, public_slug, logo_url FROM {ROOMS_TABLE} ORDER BY name"))
+    # Tables initialized at startup (lifespan)
+    result = await db.execute(text(
+        f"SELECT r.name, r.display_name, r.public_slug, r.logo_url, r.welcome_page_id, "
+        f"COALESCE(f.cnt, 0) as feedback_count, "
+        f"COALESCE(r.public_title, '') as public_title, "
+        f"COALESCE(r.public_subtitle, '') as public_subtitle "
+        f"FROM {ROOMS_TABLE} r "
+        f"LEFT JOIN (SELECT room_name, COUNT(*) as cnt FROM feedback GROUP BY room_name) f "
+        f"ON r.name = f.room_name "
+        f"ORDER BY r.name"
+    ))
     rows = result.fetchall()
-    return [{"name": r[0], "display_name": r[1], "public_slug": r[2], "logo_url": r[3]} for r in rows]
+    return [{"name": r[0], "display_name": r[1], "public_slug": r[2], "logo_url": r[3], "welcome_page_id": r[4], "feedback_count": r[5], "public_title": r[6], "public_subtitle": r[7]} for r in rows]
 
 
 @router.post("/rooms")
@@ -64,7 +98,7 @@ async def create_room(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _ensure_tables(db)
+    # Tables initialized at startup (lifespan)
     result = await db.execute(text(f"SELECT name FROM {ROOMS_TABLE} WHERE name = :n"), {"n": room.name})
     if result.fetchone():
         raise HTTPException(status_code=400, detail="Room already exists")
@@ -85,6 +119,57 @@ async def create_room(
     
     await db.commit()
     return {"name": room.name, "display_name": room.display_name, "public_slug": slug, "logo_url": None}
+
+
+class _RoomUpdate(_BM):
+    display_name: str | None = None
+    welcome_page_id: int | None = None
+    public_title: str | None = None
+    public_subtitle: str | None = None
+
+
+@router.put("/rooms/{room_name}")
+async def update_room(
+    room_name: str,
+    data: _RoomUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Update room display_name, welcome_page_id, public_title, public_subtitle."""
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="Superuser required")
+    result = await db.execute(text(f"SELECT name FROM {ROOMS_TABLE} WHERE name = :n"), {"n": room_name})
+    if not result.fetchone():
+        raise HTTPException(status_code=404, detail="Room not found")
+    if data.display_name is not None:
+        await db.execute(
+            text(f"UPDATE {ROOMS_TABLE} SET display_name = :d WHERE name = :n"),
+            {"d": data.display_name, "n": room_name},
+        )
+    if data.welcome_page_id is not None:
+        await db.execute(
+            text(f"UPDATE {ROOMS_TABLE} SET welcome_page_id = :wp WHERE name = :n"),
+            {"wp": data.welcome_page_id if data.welcome_page_id > 0 else None, "n": room_name},
+        )
+    if data.public_title is not None:
+        await db.execute(
+            text(f"UPDATE {ROOMS_TABLE} SET public_title = :t WHERE name = :n"),
+            {"t": data.public_title, "n": room_name},
+        )
+    if data.public_subtitle is not None:
+        await db.execute(
+            text(f"UPDATE {ROOMS_TABLE} SET public_subtitle = :s WHERE name = :n"),
+            {"s": data.public_subtitle, "n": room_name},
+        )
+    await db.commit()
+    result = await db.execute(text(
+        f"SELECT name, display_name, public_slug, logo_url, welcome_page_id, "
+        f"COALESCE(public_title, '') as public_title, COALESCE(public_subtitle, '') as public_subtitle "
+        f"FROM {ROOMS_TABLE} WHERE name = :n"
+    ), {"n": room_name})
+    r = result.fetchone()
+    return {"name": r[0], "display_name": r[1], "public_slug": r[2], "logo_url": r[3],
+            "welcome_page_id": r[4], "public_title": r[5], "public_subtitle": r[6]}
 
 
 @router.delete("/rooms/{room_name}")
@@ -171,7 +256,7 @@ async def users_with_rooms(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _ensure_tables(db)
+    # Tables initialized at startup (lifespan)
     result = await db.execute(text("SELECT id, email, is_active, is_superuser, created_at FROM users ORDER BY id"))
     users_rows = result.fetchall()
 
@@ -194,8 +279,6 @@ async def users_with_rooms(
         for u in users_rows
     ]
 
-
-from pydantic import BaseModel as _BM
 
 
 class _CreateUser(_BM):
@@ -281,7 +364,7 @@ async def update_user_rooms(
 ):
     if not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Superuser required")
-    await _ensure_tables(db)
+    # Tables initialized at startup (lifespan)
     await db.execute(text("DELETE FROM user_rooms WHERE user_id = :uid"), {"uid": user_id})
     for item in data.rooms:
         role = item.get("role", "Viewer")
@@ -302,14 +385,30 @@ async def my_rooms(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _ensure_tables(db)
-    result = await db.execute(text(
-        f"SELECT r.name, r.display_name, r.logo_url FROM {ROOMS_TABLE} r "
-        f"JOIN user_rooms ur ON r.name = ur.room_name "
-        f"WHERE ur.user_id = :uid ORDER BY r.name"
-    ), {"uid": current_user.id})
+    # Tables initialized at startup (lifespan)
+
+    # Superusers or users with __all__ assignment see all rooms
+    show_all = current_user.is_superuser
+    if not show_all:
+        check = await db.execute(
+            text("SELECT 1 FROM user_rooms WHERE user_id = :uid AND room_name = '__all__'"),
+            {"uid": current_user.id},
+        )
+        show_all = check.fetchone() is not None
+
+    if show_all:
+        result = await db.execute(text(
+            f"SELECT name, display_name, logo_url, public_slug, welcome_page_id FROM {ROOMS_TABLE} ORDER BY name"
+        ))
+    else:
+        result = await db.execute(text(
+            f"SELECT r.name, r.display_name, r.logo_url, r.public_slug, r.welcome_page_id FROM {ROOMS_TABLE} r "
+            f"JOIN user_rooms ur ON r.name = ur.room_name "
+            f"WHERE ur.user_id = :uid ORDER BY r.name"
+        ), {"uid": current_user.id})
+
     rows = result.fetchall()
-    return [{"name": r[0], "display_name": r[1], "logo_url": r[2]} for r in rows]
+    return [{"name": r[0], "display_name": r[1], "logo_url": r[2], "public_slug": r[3], "welcome_page_id": r[4]} for r in rows]
 
 
 @router.get("/my-role/{room_name}")
@@ -324,3 +423,51 @@ async def my_role(
     )
     row = result.fetchone()
     return {"role": row[0] if row else None, "is_superuser": current_user.is_superuser}
+
+
+# ── Default logo ─────────────────────────────────────────────────────
+
+def _find_default_logo() -> str | None:
+    """Find the default logo file in the logos directory."""
+    for ext in (".png", ".jpg", ".jpeg", ".svg", ".webp", ".gif"):
+        p = LOGOS_DIR / f"default_logo{ext}"
+        if p.exists():
+            return f"/media/logos/default_logo{ext}"
+    return None
+
+
+@router.get("/default-logo")
+async def get_default_logo():
+    """Return the URL of the default logo, if one exists."""
+    url = _find_default_logo()
+    return {"logo_url": url}
+
+
+@router.put("/default-logo")
+async def upload_default_logo(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    """Upload a default logo image."""
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="Superuser required")
+
+    ext = Path(file.filename or "logo.png").suffix.lower()
+    if ext not in (".png", ".jpg", ".jpeg", ".svg", ".webp", ".gif"):
+        raise HTTPException(status_code=400, detail="Only image files allowed")
+
+    LOGOS_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Remove old default logos
+    for old_ext in (".png", ".jpg", ".jpeg", ".svg", ".webp", ".gif"):
+        old = LOGOS_DIR / f"default_logo{old_ext}"
+        if old.exists():
+            old.unlink()
+
+    filename = f"default_logo{ext}"
+    filepath = LOGOS_DIR / filename
+    with open(filepath, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    logo_url = f"/media/logos/{filename}"
+    return {"logo_url": logo_url}

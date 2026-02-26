@@ -19,7 +19,7 @@ function buildTheme(mode: ModeName): ThemeConfig {
         algorithm: isDark ? antTheme.darkAlgorithm : antTheme.defaultAlgorithm,
         token: {
             ...RefineThemes.Blue.token,
-            fontFamily: "'Atkinson Hyperlegible', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+            fontFamily: "'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', Arial, sans-serif",
             borderRadius: 6,
         },
         components: {

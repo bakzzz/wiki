@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, Select, message, Space, Tag, Typography, Popconfirm, Tooltip, Switch, Upload, theme as antTheme } from 'antd';
+import { Table, Button, Modal, Form, Input, Select, message, Space, Tag, Typography, Popconfirm, Tooltip, Switch, Upload, Spin, theme as antTheme } from 'antd';
 import Icon from './Icon';
 import { API_BASE_URL } from '../config';
 import { useAuth } from '../contexts/AuthContext';
@@ -13,6 +13,18 @@ interface RoomItem {
     display_name: string;
     public_slug: string | null;
     logo_url: string | null;
+    welcome_page_id: number | null;
+    feedback_count: number;
+    public_title: string;
+    public_subtitle: string;
+}
+
+interface FeedbackItem {
+    id: number;
+    text: string;
+    author_name: string;
+    author_org: string;
+    created_at: string | null;
 }
 
 interface UserRoomEntry {
@@ -31,6 +43,24 @@ interface UserItem {
 
 const ROLES = ['Owner', 'Admin', 'Editor', 'Viewer'];
 const ROLE_COLORS: Record<string, string> = { Owner: 'gold', Admin: 'red', Editor: 'blue', Viewer: 'green' };
+
+const generateSlug = (text: string) => {
+    const cyrillicToLatin: Record<string, string> = {
+        'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e', 'ж': 'zh',
+        'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o',
+        'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'h', 'ц': 'ts',
+        'ч': 'ch', 'ш': 'sh', 'щ': 'sch', 'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu',
+        'я': 'ya',
+    };
+    return text
+        .toLowerCase()
+        .split('')
+        .map(char => cyrillicToLatin[char] || char)
+        .join('')
+        .replace(/[^a-z0-9_]/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_|_$/g, '');
+};
 
 // ── Theme Switcher ──
 const ThemeSwitcher: React.FC = () => {
@@ -66,6 +96,13 @@ const AdminPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const [roomForm] = Form.useForm();
     const [userForm] = Form.useForm();
     const [passwordForm] = Form.useForm();
+    const [defaultLogoUrl, setDefaultLogoUrl] = useState<string | null>(null);
+    const [pages, setPages] = useState<{ id: number; title: string }[]>([]);
+    // Feedback state
+    const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
+    const [feedbackItems, setFeedbackItems] = useState<FeedbackItem[]>([]);
+    const [feedbackLoading, setFeedbackLoading] = useState(false);
+    const [feedbackRoomName, setFeedbackRoomName] = useState('');
 
     const headers: Record<string, string> = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
@@ -87,7 +124,35 @@ const AdminPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         setLoadingUsers(false);
     };
 
-    useEffect(() => { loadRooms(); loadUsers(); }, []);
+    const loadDefaultLogo = async () => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/v1/admin/default-logo`, { headers });
+            if (res.ok) {
+                const data = await res.json();
+                setDefaultLogoUrl(data.logo_url);
+            }
+        } catch { }
+    };
+
+    const loadPages = async () => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/v1/pages/tree`, { headers });
+            if (res.ok) {
+                const data = await res.json();
+                const flatten = (items: any[]): { id: number; title: string }[] => {
+                    const result: { id: number; title: string }[] = [];
+                    for (const item of items) {
+                        result.push({ id: item.id, title: item.title });
+                        if (item.children?.length) result.push(...flatten(item.children));
+                    }
+                    return result;
+                };
+                setPages(flatten(data));
+            }
+        } catch { }
+    };
+
+    useEffect(() => { loadRooms(); loadUsers(); loadDefaultLogo(); loadPages(); }, []);
 
     // ── Room actions ─────────────────────────────────
     const handleCreateRoom = async (values: { name: string; display_name: string }) => {
@@ -137,10 +202,65 @@ const AdminPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         } catch { message.error('Ошибка сети'); }
     };
 
+    const handleUpdateRoom = async (roomName: string, displayName: string) => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/v1/admin/rooms/${roomName}`, {
+                method: 'PUT', headers, body: JSON.stringify({ display_name: displayName }),
+            });
+            if (res.ok) { message.success('Продукт обновлён'); loadRooms(); refreshRooms(); }
+            else { const err = await res.json(); message.error(err.detail || 'Ошибка'); }
+        } catch { message.error('Ошибка сети'); }
+    };
+
+    const handleUpdateRoomField = async (roomName: string, field: string, value: string) => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/v1/admin/rooms/${roomName}`, {
+                method: 'PUT', headers, body: JSON.stringify({ [field]: value }),
+            });
+            if (res.ok) { message.success('Сохранено'); loadRooms(); }
+            else { const err = await res.json(); message.error(err.detail || 'Ошибка'); }
+        } catch { message.error('Ошибка сети'); }
+    };
+
     const copyPublicLink = (slug: string) => {
         const url = `${window.location.origin}/public/${slug}`;
         navigator.clipboard.writeText(url);
         message.success('Ссылка скопирована');
+    };
+
+    const handleUploadDefaultLogo = async (file: File) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/v1/admin/default-logo`, {
+                method: 'PUT',
+                headers: { Authorization: `Bearer ${token}` },
+                body: formData,
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setDefaultLogoUrl(data.logo_url);
+                message.success('Логотип по умолчанию обновлён!');
+                refreshRooms();
+            }
+        } catch {
+            message.error('Ошибка загрузки');
+        }
+    };
+
+    const handleWelcomePageChange = async (roomName: string, pageId: number | null) => {
+        try {
+            await fetch(`${API_BASE_URL}/api/v1/admin/rooms/${roomName}`, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify({ welcome_page_id: pageId || 0 }),
+            });
+            loadRooms();
+            refreshRooms();
+            message.success('Стартовая страница обновлена');
+        } catch {
+            message.error('Ошибка обновления');
+        }
     };
 
     // ── User actions ─────────────────────────────────
@@ -225,7 +345,7 @@ const AdminPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const { token: themeToken } = antTheme.useToken();
 
     return (
-        <div style={{ padding: '32px 48px', minHeight: 'calc(100vh - 56px)', overflow: 'auto', maxWidth: 1200, margin: '0 auto' }}>
+        <div style={{ padding: '32px 48px', minHeight: 'calc(100vh - 56px)', overflow: 'auto', margin: '0 auto' }}>
             {/* ─── HEADER ──────────────────────────────── */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
                 <Title level={2} style={{ margin: 0 }}>Панель управления</Title>
@@ -241,6 +361,45 @@ const AdminPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 marginBottom: 24,
             }}>
                 <ThemeSwitcher />
+            </div>
+
+            {/* ─── DEFAULT LOGO ─────────────────────────────── */}
+            <div style={{
+                background: themeToken.colorBgContainer,
+                borderRadius: themeToken.borderRadiusLG,
+                border: `1px solid ${themeToken.colorBorderSecondary}`,
+                padding: '24px 28px',
+                marginBottom: 24,
+            }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Title level={4} style={{ margin: 0 }}><Icon name="image" /> Логотип по умолчанию</Title>
+                    <Space>
+                        <div style={{
+                            width: 200,
+                            height: 60,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            border: `1px dashed ${themeToken.colorBorderSecondary}`,
+                            borderRadius: themeToken.borderRadius,
+                            overflow: 'hidden',
+                            background: themeToken.colorBgLayout,
+                        }}>
+                            <img
+                                src={defaultLogoUrl ? `${API_BASE_URL}${defaultLogoUrl}` : '/logo.svg'}
+                                alt="Default logo"
+                                style={{ maxWidth: 190, maxHeight: 52, objectFit: 'contain' }}
+                            />
+                        </div>
+                        <Upload
+                            showUploadList={false}
+                            accept="image/*"
+                            beforeUpload={(file) => { handleUploadDefaultLogo(file); return false; }}
+                        >
+                            <Button icon={<Icon name="upload" />}>Загрузить</Button>
+                        </Upload>
+                    </Space>
+                </div>
             </div>
 
             {/* ─── ROOMS ─────────────────────────────────── */}
@@ -295,7 +454,21 @@ const AdminPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                             ),
                         },
                         { title: 'ID', dataIndex: 'name', key: 'name', width: 160 },
-                        { title: 'Название', dataIndex: 'display_name', key: 'display_name', width: 220 },
+                        {
+                            title: 'Название', key: 'display_name', width: 220,
+                            render: (_: any, r: RoomItem) => (
+                                <Typography.Text
+                                    editable={{
+                                        onChange: (val: string) => {
+                                            if (val && val !== r.display_name) handleUpdateRoom(r.name, val);
+                                        },
+                                        tooltip: 'Редактировать название',
+                                    }}
+                                >
+                                    {r.display_name}
+                                </Typography.Text>
+                            ),
+                        },
                         {
                             title: 'Публичная ссылка', key: 'public',
                             render: (_: any, r: RoomItem) => r.public_slug ? (
@@ -317,6 +490,72 @@ const AdminPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                 <Button icon={<Icon name="link" />} onClick={() => handleTogglePublic(r.name)}>
                                     Включить публичную ссылку
                                 </Button>
+                            ),
+                        },
+                        {
+                            title: 'Стартовая страница', key: 'welcome', width: 220,
+                            render: (_: any, r: RoomItem) => (
+                                <Select
+                                    value={r.welcome_page_id || undefined}
+                                    onChange={(val) => handleWelcomePageChange(r.name, val || null)}
+                                    allowClear
+                                    placeholder="Не выбрана"
+                                    size="small"
+                                    style={{ width: '100%' }}
+                                    options={pages.map(p => ({ value: p.id, label: p.title }))}
+                                />
+                            ),
+                        },
+                        {
+                            title: 'Заголовок публичной', key: 'public_title', width: 220,
+                            render: (_: any, r: RoomItem) => (
+                                <Typography.Text
+                                    editable={{
+                                        onChange: (val: string) => {
+                                            if (val !== r.public_title) handleUpdateRoomField(r.name, 'public_title', val);
+                                        },
+                                        tooltip: 'Заголовок для публичной страницы',
+                                    }}
+                                >
+                                    {r.public_title || ''}
+                                </Typography.Text>
+                            ),
+                        },
+                        {
+                            title: 'Подзаголовок', key: 'public_subtitle', width: 220,
+                            render: (_: any, r: RoomItem) => (
+                                <Typography.Text
+                                    editable={{
+                                        onChange: (val: string) => {
+                                            if (val !== r.public_subtitle) handleUpdateRoomField(r.name, 'public_subtitle', val);
+                                        },
+                                        tooltip: 'Подзаголовок для публичной страницы',
+                                    }}
+                                >
+                                    {r.public_subtitle || ''}
+                                </Typography.Text>
+                            ),
+                        },
+                        {
+                            title: 'Сообщения', key: 'feedback', width: 110, align: 'center' as const,
+                            render: (_: any, r: RoomItem) => r.public_slug ? (
+                                <Button
+                                    type="link"
+                                    onClick={async () => {
+                                        setFeedbackRoomName(r.display_name);
+                                        setFeedbackLoading(true);
+                                        setFeedbackModalOpen(true);
+                                        try {
+                                            const res = await fetch(`${API_BASE_URL}/api/v1/public/${r.public_slug}/feedback`, { headers });
+                                            if (res.ok) setFeedbackItems(await res.json());
+                                        } catch { }
+                                        setFeedbackLoading(false);
+                                    }}
+                                >
+                                    {r.feedback_count || 0}
+                                </Button>
+                            ) : (
+                                <Typography.Text type="secondary">—</Typography.Text>
                             ),
                         },
                         {
@@ -458,12 +697,41 @@ const AdminPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
             {/* ─── Create Room Modal ─────────────────────── */}
             <Modal title="Создать продукт" open={roomModalOpen} onCancel={() => setRoomModalOpen(false)} footer={null} width={480}>
-                <Form form={roomForm} layout="vertical" onFinish={handleCreateRoom} style={{ marginTop: 16 }}>
-                    <Form.Item name="name" label="ID продукта (латиница, нижний регистр)" rules={[{ required: true }, { pattern: /^[a-z0-9_]+$/, message: 'Только строчные латинские буквы, цифры и _' }]}>
-                        <Input size="large" placeholder="my_team" />
-                    </Form.Item>
+                <Form
+                    form={roomForm}
+                    layout="vertical"
+                    onFinish={handleCreateRoom}
+                    style={{ marginTop: 16 }}
+                >
                     <Form.Item name="display_name" label="Отображаемое название" rules={[{ required: true }]}>
-                        <Input size="large" placeholder="Моя команда" />
+                        <Input
+                            size="large"
+                            placeholder="Моя команда"
+                            onBlur={(e) => {
+                                if (!roomForm.isFieldTouched('name') && e.target.value) {
+                                    roomForm.setFieldValue('name', generateSlug(e.target.value));
+                                }
+                            }}
+                        />
+                    </Form.Item>
+                    <Form.Item name="name" label="ID продукта (латиница, нижний регистр)" rules={[{ required: true }, { pattern: /^[a-z0-9_]+$/, message: 'Только строчные латинские буквы, цифры и _' }]}>
+                        <Input
+                            size="large"
+                            placeholder="my_team"
+                            addonAfter={
+                                <Button
+                                    type="text"
+                                    icon={<Icon name="refresh" />}
+                                    onClick={() => {
+                                        const currentTitle = roomForm.getFieldValue('display_name');
+                                        if (currentTitle) {
+                                            roomForm.setFieldValue('name', generateSlug(currentTitle));
+                                        }
+                                    }}
+                                    title="Сгенерировать из названия"
+                                />
+                            }
+                        />
                     </Form.Item>
                     <Button type="primary" htmlType="submit" size="large" block>Создать</Button>
                 </Form>
@@ -490,6 +758,40 @@ const AdminPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     </Form.Item>
                     <Button type="primary" htmlType="submit" size="large" block>Обновить пароль</Button>
                 </Form>
+            </Modal>
+
+            {/* ─── Feedback List Modal ─────────────────── */}
+            <Modal
+                title={`Сообщения — ${feedbackRoomName}`}
+                open={feedbackModalOpen}
+                onCancel={() => { setFeedbackModalOpen(false); setFeedbackItems([]); }}
+                footer={null}
+                width={700}
+            >
+                {feedbackLoading ? (
+                    <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}><Spin /></div>
+                ) : feedbackItems.length === 0 ? (
+                    <Typography.Text type="secondary">Нет сообщений</Typography.Text>
+                ) : (
+                    <Table
+                        dataSource={feedbackItems}
+                        rowKey="id"
+                        size="small"
+                        pagination={false}
+                        style={{ maxHeight: 400, overflowY: 'auto' }}
+                        columns={[
+                            { title: 'Сообщение', dataIndex: 'text', key: 'text', ellipsis: true },
+                            {
+                                title: 'Дата', key: 'date', width: 140,
+                                render: (_: any, item: FeedbackItem) => item.created_at
+                                    ? new Date(item.created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                                    : '—',
+                            },
+                            { title: 'Имя', dataIndex: 'author_name', key: 'author_name', width: 140 },
+                            { title: 'Организация', dataIndex: 'author_org', key: 'author_org', width: 160 },
+                        ]}
+                    />
+                )}
             </Modal>
         </div>
     );

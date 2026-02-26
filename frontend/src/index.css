@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&display=swap');
 
 * {
   margin: 0;
@@ -11,6 +11,20 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   transition: background 0.3s, color 0.3s;
+}
+
+b,
+strong {
+  font-weight: 600;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-weight: 600;
 }
 
 [data-theme='light'] body,
@@ -57,6 +71,15 @@ body {
   background: rgba(22, 119, 255, 0.15);
 }
 
+/* ── Sidebar tree hover add-child button ── */
+.sidebar-tree .ant-tree-treenode:hover .sidebar-tree-add-btn {
+  opacity: 1 !important;
+}
+
+.sidebar-tree .ant-tree-title {
+  width: 100%;
+}
+
 /* ── Tiptap editor styling ── */
 .tiptap {
   outline: none;
@@ -71,9 +94,38 @@ body {
 
 .tiptap h1,
 .tiptap h2,
-.tiptap h3 {
+.tiptap h3,
+.tiptap h4,
+.tiptap h5,
+.tiptap h6 {
   margin-top: 1em;
   margin-bottom: 0.5em;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-weight: 600;
+}
+
+.tiptap h1 {
+  font-size: 2em;
+}
+
+.tiptap h2 {
+  font-size: 1.6em;
+}
+
+.tiptap h3 {
+  font-size: 1.35em;
+}
+
+.tiptap h4 {
+  font-size: 1.15em;
+}
+
+.tiptap h5 {
+  font-size: 1em;
+}
+
+.tiptap h6 {
+  font-size: 0.9em;
 }
 
 .tiptap ul,
@@ -107,6 +159,13 @@ body {
   border-radius: 8px;
   overflow-x: auto;
   margin-bottom: 0.75em;
+}
+
+.tiptap pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  font-size: inherit;
 }
 
 .ProseMirror {
@@ -149,4 +208,84 @@ body {
 
 .ant-table-thead>tr>th {
   font-weight: 600;
+}
+
+/* ── Sidebar Tree Optimization ── */
+.sidebar-tree {
+  overflow: hidden !important;
+}
+
+.sidebar-tree .ant-tree-list-holder-inner {
+  overflow: hidden;
+}
+
+.sidebar-tree .ant-tree-treenode {
+  display: flex !important;
+  align-items: center;
+  padding-bottom: 0;
+  overflow: hidden;
+  max-width: 100%;
+  padding-right: 0;
+  border-radius: 6px;
+  margin-bottom: 1px;
+}
+
+.sidebar-tree .ant-tree-treenode-selected {
+  background-color: rgba(22, 119, 255, 0.1) !important;
+}
+
+.sidebar-tree .ant-tree-treenode:hover {
+  background-color: rgba(22, 119, 255, 0.04);
+}
+
+.sidebar-tree .ant-tree-node-content-wrapper {
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  padding: 0 0 0 2px !important;
+}
+
+.sidebar-tree .ant-tree-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  line-height: 1.3;
+  padding: 2px 0;
+  display: block;
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar-tree .ant-tree-indent-unit {
+  width: 12px;
+}
+
+.sidebar-tree .ant-tree-switcher {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 16px !important;
+  min-width: 16px;
+  height: 24px;
+  margin-right: 0;
+}
+
+.sidebar-tree .ant-tree-switcher .ant-tree-switcher-icon,
+.sidebar-tree .ant-tree-switcher svg {
+  font-size: 8px !important;
+  width: 8px;
+  height: 8px;
+}
+
+.sidebar-tree .ant-tree-node-content-wrapper:hover {
+  background-color: transparent !important;
+}
+
+.sidebar-tree .ant-tree-node-content-wrapper.ant-tree-node-selected {
+  background-color: transparent !important;
 }

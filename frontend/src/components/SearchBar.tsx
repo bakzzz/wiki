@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { Input, List, Typography, Popover } from 'antd';
 import { API_BASE_URL, tenantHeaders } from '../config';
 import { useAuth } from '../contexts/AuthContext';
@@ -25,16 +25,17 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSelect }) => {
     const [results, setResults] = useState<SearchResult[]>([]);
     const [loading, setLoading] = useState(false);
     const [open, setOpen] = useState(false);
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const handleSearch = async (value: string) => {
-        if (!value.trim()) {
+    const doSearch = useCallback(async (value: string) => {
+        if (value.trim().length < 3) {
             setResults([]);
             setOpen(false);
             return;
         }
         setLoading(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/api/v1/search?q=${encodeURIComponent(value)}`, {
+            const res = await fetch(`${API_BASE_URL}/api/v1/search/?q=${encodeURIComponent(value)}`, {
                 headers: tenantHeaders(token, currentRoom)
             });
             const data = await res.json();
@@ -45,6 +46,17 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSelect }) => {
         } finally {
             setLoading(false);
         }
+    }, [token, currentRoom]);
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
+        if (!value) {
+            setOpen(false);
+            setResults([]);
+            return;
+        }
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => doSearch(value), 300);
     };
 
     const content = (
@@ -73,7 +85,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSelect }) => {
                 />
             ) : (
                 <div style={{ padding: 16, textAlign: 'center' }}>
-                    <Text type="secondary">No results</Text>
+                    <Text type="secondary">Ничего не найдено</Text>
                 </div>
             )}
         </div>
@@ -83,10 +95,8 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSelect }) => {
         <Popover content={content} open={open && results.length > 0} placement="bottomRight" trigger={[]}>
             <Input.Search
                 placeholder="Поиск страниц..."
-                onSearch={handleSearch}
-                onChange={(e) => {
-                    if (!e.target.value) { setOpen(false); setResults([]); }
-                }}
+                onSearch={(value) => doSearch(value)}
+                onChange={handleChange}
                 loading={loading}
                 allowClear
             />

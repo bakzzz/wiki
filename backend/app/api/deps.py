@@ -2,6 +2,7 @@ from fastapi import Request, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy import text
 from jose import jwt, JWTError
 
 from app.db.session import async_session_maker
@@ -19,6 +20,8 @@ async def get_db(request: Request) -> AsyncSession:
     async with async_session_maker() as session:
         if tenant_id != "public":
             await set_tenant_schema(session, tenant_id)
+        else:
+            await session.execute(text('SET search_path TO "public"'))
         yield session
 
 

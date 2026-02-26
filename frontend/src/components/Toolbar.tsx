@@ -1,15 +1,29 @@
-import React from 'react';
-import { Button, Tooltip, Divider, Upload, message, theme } from 'antd';
+import React, { useState, useEffect } from 'react';
+import { Button, Tooltip, Divider, Upload, message, theme, Popconfirm, Select } from 'antd';
 import Icon from './Icon';
 import type { Editor } from '@tiptap/react';
 import { API_BASE_URL } from '../config';
 
 interface ToolbarProps {
     editor: Editor | null;
+    onSave?: () => void;
+    onDelete?: () => void;
+    onSettings?: () => void;
+    saving?: boolean;
 }
 
-const Toolbar: React.FC<ToolbarProps> = ({ editor }) => {
+const Toolbar: React.FC<ToolbarProps> = ({ editor, onSave, onDelete, onSettings, saving }) => {
     const { token } = theme.useToken();
+
+    // Force re-render on editor state changes (selection, formatting)
+    const [, setTick] = useState(0);
+    useEffect(() => {
+        if (!editor) return;
+        const handler = () => setTick(t => t + 1);
+        editor.on('transaction', handler);
+        return () => { editor.off('transaction', handler); };
+    }, [editor]);
+
     if (!editor) return null;
 
     const handleImageUpload = async (file: File) => {
@@ -53,35 +67,52 @@ const Toolbar: React.FC<ToolbarProps> = ({ editor }) => {
                 icon={icon}
                 size="small"
                 onClick={action}
+                onMouseDown={(e) => e.preventDefault()}
                 style={{ minWidth: 32 }}
             />
         </Tooltip>
     );
 
+    // Determine current heading level for the Select
+    const currentLevel = [1, 2, 3, 4, 5, 6].find(l => editor.isActive('heading', { level: l }));
+    const headingValue = currentLevel ? `h${currentLevel}` : 'paragraph';
+
+    const handleHeadingChange = (value: string) => {
+        if (value === 'paragraph') {
+            editor.chain().focus().setParagraph().run();
+        } else {
+            const level = parseInt(value.replace('h', '')) as 1 | 2 | 3 | 4 | 5 | 6;
+            editor.chain().focus().toggleHeading({ level }).run();
+        }
+    };
+
     return (
         <div style={{
             display: 'flex',
             flexWrap: 'wrap',
-            gap: 2,
-            padding: '8px 12px',
-            background: token.colorBgTextHover,
+            gap: 4,
+            padding: '10px 20px',
+            background: '#fff',
             borderBottom: `1px solid ${token.colorBorderSecondary}`,
-            borderRadius: '6px 6px 0 0',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
             alignItems: 'center',
         }}>
-            {/* Headings */}
-            {[1, 2, 3].map(level => (
-                <Tooltip title={`Heading ${level}`} key={level}>
-                    <Button
-                        type={editor.isActive('heading', { level }) ? 'primary' : 'text'}
-                        size="small"
-                        onClick={() => editor.chain().focus().toggleHeading({ level: level as 1 | 2 | 3 }).run()}
-                        style={{ minWidth: 32, fontWeight: 'bold', fontSize: 12 }}
-                    >
-                        H{level}
-                    </Button>
-                </Tooltip>
-            ))}
+            {/* Heading selector */}
+            <Select
+                value={headingValue}
+                onChange={handleHeadingChange}
+                size="small"
+                style={{ width: 150, fontFamily: "'Segoe UI', sans-serif" }}
+                options={[
+                    { value: 'paragraph', label: 'Обычный текст' },
+                    { value: 'h1', label: <span style={{ fontSize: 18, fontWeight: 600 }}>Заголовок 1</span> },
+                    { value: 'h2', label: <span style={{ fontSize: 16, fontWeight: 600 }}>Заголовок 2</span> },
+                    { value: 'h3', label: <span style={{ fontSize: 14, fontWeight: 600 }}>Заголовок 3</span> },
+                    { value: 'h4', label: <span style={{ fontSize: 13, fontWeight: 600 }}>Заголовок 4</span> },
+                    { value: 'h5', label: <span style={{ fontSize: 12, fontWeight: 600 }}>Заголовок 5</span> },
+                    { value: 'h6', label: <span style={{ fontSize: 11, fontWeight: 600 }}>Заголовок 6</span> },
+                ]}
+            />
 
             <Divider type="vertical" style={{ margin: '0 4px' }} />
 
@@ -110,28 +141,8 @@ const Toolbar: React.FC<ToolbarProps> = ({ editor }) => {
             {/* Extras */}
             <ToolBtn icon={<Icon name="link" />} title="Вставить ссылку" action={addLink} isActive={editor.isActive('link')} />
             <ToolBtn icon={<Icon name="horizontal_rule" />} title="Разделитель" action={() => editor.chain().focus().setHorizontalRule().run()} />
-
-            <Tooltip title="Блок кода">
-                <Button
-                    type={editor.isActive('codeBlock') ? 'primary' : 'text'}
-                    size="small"
-                    onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-                    style={{ minWidth: 32, fontFamily: 'monospace', fontSize: 11 }}
-                >
-                    {'</>'}
-                </Button>
-            </Tooltip>
-
-            <Tooltip title="Цитата">
-                <Button
-                    type={editor.isActive('blockquote') ? 'primary' : 'text'}
-                    size="small"
-                    onClick={() => editor.chain().focus().toggleBlockquote().run()}
-                    style={{ minWidth: 32, fontWeight: 'bold' }}
-                >
-                    "
-                </Button>
-            </Tooltip>
+            <ToolBtn icon={<Icon name="data_object" />} title="Блок кода" action={() => editor.chain().focus().toggleCodeBlock().run()} isActive={editor.isActive('codeBlock')} />
+            <ToolBtn icon={<Icon name="format_quote" />} title="Цитата" action={() => editor.chain().focus().toggleBlockquote().run()} isActive={editor.isActive('blockquote')} />
 
             <Divider type="vertical" style={{ margin: '0 4px' }} />
 
@@ -151,6 +162,26 @@ const Toolbar: React.FC<ToolbarProps> = ({ editor }) => {
             {/* Undo/Redo */}
             <ToolBtn icon={<Icon name="undo" />} title="Отменить (Ctrl+Z)" action={() => editor.chain().focus().undo().run()} />
             <ToolBtn icon={<Icon name="redo" />} title="Повторить (Ctrl+Shift+Z)" action={() => editor.chain().focus().redo().run()} />
+
+            {/* Spacer */}
+            {(onSave || onDelete || onSettings) && <div style={{ flex: 1 }} />}
+
+            {/* Save/Settings/Delete actions */}
+            {onSettings && (
+                <Button size="small" icon={<Icon name="settings" />} onClick={onSettings} title="Настройки страницы">
+                    Настройки
+                </Button>
+            )}
+            {onSave && (
+                <Button type="primary" icon={<Icon name="save" />} size="small" loading={saving} onClick={onSave}>
+                    Сохранить
+                </Button>
+            )}
+            {onDelete && (
+                <Popconfirm title="Удалить страницу?" onConfirm={onDelete} okText="Да" cancelText="Нет">
+                    <Button danger size="small" icon={<Icon name="delete" />}>Удалить</Button>
+                </Popconfirm>
+            )}
         </div>
     );
 };

@@ -4,18 +4,29 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node --max-http-header-size=80000 ./node_modules/vite/bin/vite.js",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "serve": "npm run build && npx serve -s dist -l 5173"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
     "@refinedev/antd": "^6.0.3",
+    "@tanstack/react-query": "^5.90.21",
     "@tiptap/extension-code-block-lowlight": "^3.20.0",
+    "@tiptap/extension-color": "^3.20.0",
+    "@tiptap/extension-font-family": "^3.20.0",
+    "@tiptap/extension-highlight": "^3.20.0",
     "@tiptap/extension-image": "^3.20.0",
     "@tiptap/extension-link": "^3.20.0",
+    "@tiptap/extension-table": "^3.20.0",
+    "@tiptap/extension-table-cell": "^3.20.0",
+    "@tiptap/extension-table-header": "^3.20.0",
+    "@tiptap/extension-table-row": "^3.20.0",
     "@tiptap/extension-text-align": "^3.20.0",
+    "@tiptap/extension-text-style": "^3.20.0",
     "@tiptap/extension-underline": "^3.20.0",
     "@tiptap/pm": "^3.20.0",
     "@tiptap/react": "^3.20.0",
@@ -28,6 +39,8 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
@@ -36,8 +49,11 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
+    "jsdom": "^28.1.0",
+    "serve": "^14.2.5",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.48.0",
-    "vite": "^7.3.1"
+    "vite": "^7.3.1",
+    "vitest": "^4.0.18"
   }
 }
