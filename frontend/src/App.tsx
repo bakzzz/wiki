@@ -22,18 +22,26 @@ const WikiApp: React.FC = () => {
   const { user, logout } = useAuth();
   const { token: authToken } = useAuth();
   const { rooms, currentRoom, currentLogo, welcomePageId, currentPublicSlug, myRole, canEdit, canAdmin, switchRoom, loading: roomsLoading } = useRoom();
+
+  // ─── Core state: selectedPageId is only valid for pageRoom ───
   const [selectedPageId, setSelectedPageId] = useState<number | null>(null);
+  const [pageRoom, setPageRoom] = useState<string>(''); // Room that selectedPageId belongs to
   const [firstPageId, setFirstPageId] = useState<number | null>(null);
-  const [treeKey, setTreeKey] = useState(0);
+  const [firstPageRoom, setFirstPageRoom] = useState<string>(''); // Room that firstPageId belongs to
   const { token } = theme.useToken();
 
   // ─── URL Routing State ───
   const [initialUrlHandled, setInitialUrlHandled] = useState(false);
   const selectedSlugRef = React.useRef<string | null>(null);
-  // When true, URL-driven navigation is in progress — block room-change resets
   const navigatingFromUrlRef = React.useRef(false);
-  // Pending slug waiting for room switch to complete
   const pendingSlugRef = React.useRef<{ room: string; slug: string } | null>(null);
+
+  // ─── Safe page selection: always tracks which room the page belongs to ───
+  const selectPage = useCallback((pageId: number | null, room?: string) => {
+    setSelectedPageId(pageId);
+    setPageRoom(room || currentRoom);
+    if (!pageId) selectedSlugRef.current = null;
+  }, [currentRoom]);
 
   // ─── Resolve slug → pageId via API ───
   const resolveSlug = useCallback(async (slug: string, room: string): Promise<{ id: number; slug: string } | null> => {
@@ -85,21 +93,18 @@ const WikiApp: React.FC = () => {
           const pageSlug = parts[1];
           navigatingFromUrlRef.current = true;
           if (currentRoom === urlRoom) {
-            // Room matches → resolve slug now
             resolveSlug(pageSlug, urlRoom).then(result => {
               if (result) {
                 selectedSlugRef.current = result.slug;
-                setSelectedPageId(result.id);
+                selectPage(result.id, urlRoom);
               }
               navigatingFromUrlRef.current = false;
             });
           } else {
-            // Room doesn't match → store pending slug, switch room
             pendingSlugRef.current = { room: urlRoom, slug: pageSlug };
             switchRoom(urlRoom);
           }
         } else {
-          // Just room, no slug
           if (currentRoom !== urlRoom) switchRoom(urlRoom);
         }
       }
@@ -115,47 +120,43 @@ const WikiApp: React.FC = () => {
       resolveSlug(slug, room).then(result => {
         if (result) {
           selectedSlugRef.current = result.slug;
-          setSelectedPageId(result.id);
+          selectPage(result.id, room);
         }
         navigatingFromUrlRef.current = false;
       });
     }
   }, [currentRoom]);
 
-  // Track previous room to distinguish initial set from actual switch
-  const prevRoomRef = React.useRef<string>('');
-
-  // ═══ EFFECT 3: Reset page when room changes (user-driven only) ═══
+  // ═══ EFFECT 3: Reset page when room changes ═══
+  // KEY FIX: Clear selectedPageId when room no longer matches pageRoom.
+  // This is the ONLY place we handle room-change resets.
   React.useEffect(() => {
-    // Skip during URL-driven navigation to avoid killing the pending page
     if (navigatingFromUrlRef.current || pendingSlugRef.current) return;
-
-    const prevRoom = prevRoomRef.current;
-    prevRoomRef.current = currentRoom;
-
-    // Skip on initial room set ('' → first room) — tree hasn't loaded yet
-    if (!prevRoom) return;
-
-    // Only reset when actually switching between rooms
-    if (prevRoom !== currentRoom) {
-      selectedSlugRef.current = null;
-      setSelectedPageId(null);
-      setFirstPageId(null); // Clear stale page from previous room
-      setTreeKey(prev => prev + 1); // Force tree to re-mount for new room
+    // If selectedPageId belongs to a different room, clear it
+    if (selectedPageId && pageRoom && pageRoom !== currentRoom) {
+      selectPage(null);
+      setFirstPageId(null);
+      setFirstPageRoom('');
     }
-  }, [currentRoom]);
+    // If firstPageId belongs to a different room, clear it too
+    if (firstPageId && firstPageRoom && firstPageRoom !== currentRoom) {
+      setFirstPageId(null);
+      setFirstPageRoom('');
+    }
+  }, [currentRoom, selectedPageId, pageRoom, firstPageId, firstPageRoom]);
 
   // ═══ EFFECT 4: Auto-select topmost page or welcome page ═══
   React.useEffect(() => {
     if (!selectedPageId && initialUrlHandled
       && !navigatingFromUrlRef.current && !pendingSlugRef.current) {
-      if (firstPageId) {
-        setSelectedPageId(firstPageId);
+      // Only auto-select if firstPageId belongs to the current room
+      if (firstPageId && firstPageRoom === currentRoom) {
+        selectPage(firstPageId, currentRoom);
       } else if (welcomePageId) {
-        setSelectedPageId(welcomePageId);
+        selectPage(welcomePageId, currentRoom);
       }
     }
-  }, [firstPageId, welcomePageId, currentRoom, initialUrlHandled]);
+  }, [firstPageId, firstPageRoom, welcomePageId, currentRoom, initialUrlHandled, selectedPageId]);
 
   // ═══ EFFECT 5: Sync URL bar when page changes ═══
   React.useEffect(() => {
@@ -196,7 +197,7 @@ const WikiApp: React.FC = () => {
           resolveSlug(pageSlug, urlRoom).then(result => {
             if (result) {
               selectedSlugRef.current = result.slug;
-              setSelectedPageId(result.id);
+              selectPage(result.id, urlRoom);
             }
           });
         }
@@ -205,11 +206,9 @@ const WikiApp: React.FC = () => {
         if (rooms.some(r => r.name === urlRoom)) {
           switchRoom(urlRoom);
         }
-        selectedSlugRef.current = null;
-        setSelectedPageId(null);
+        selectPage(null);
       } else {
-        selectedSlugRef.current = null;
-        setSelectedPageId(null);
+        selectPage(null);
       }
     };
     window.addEventListener('popstate', onPopState);
@@ -218,21 +217,22 @@ const WikiApp: React.FC = () => {
 
   const handlePageSelect = useCallback((pageId: number) => {
     selectedSlugRef.current = null; // will be fetched by URL sync effect
-    setSelectedPageId(pageId);
-  }, []);
+    selectPage(pageId, currentRoom);
+  }, [currentRoom, selectPage]);
 
   const handleTreeLoaded = useCallback((pages: any[]) => {
     if (pages.length > 0) {
       setFirstPageId(pages[0].id);
+      setFirstPageRoom(currentRoom);
     } else {
       setFirstPageId(null);
+      setFirstPageRoom('');
     }
-  }, []);
+  }, [currentRoom]);
 
   const handlePageDeleted = useCallback(() => {
-    setSelectedPageId(null);
-    setTreeKey(prev => prev + 1);
-  }, []);
+    selectPage(null);
+  }, [selectPage]);
 
   if (!currentRoom) {
     return (
@@ -243,6 +243,9 @@ const WikiApp: React.FC = () => {
   }
 
   const roleColor = myRole ? { Owner: 'gold', Admin: 'red', Editor: 'blue', Viewer: 'green' }[myRole] || 'default' : 'default';
+
+  // Only pass pageId to Editor if it belongs to the current room
+  const safePageId = (selectedPageId && pageRoom === currentRoom) ? selectedPageId : null;
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -325,19 +328,19 @@ const WikiApp: React.FC = () => {
             )}
           </div>
           <nav aria-label="Меню страниц">
-            <SidebarTree key={treeKey} onSelect={handlePageSelect} onTreeLoaded={handleTreeLoaded} selectedPageId={selectedPageId} canEdit={canEdit} />
+            <SidebarTree onSelect={handlePageSelect} onTreeLoaded={handleTreeLoaded} selectedPageId={safePageId} canEdit={canEdit} />
           </nav>
         </Sider>
         <Content style={{
-          padding: selectedPageId ? 0 : '24px',
+          padding: safePageId ? 0 : '24px',
           backgroundColor: token.colorBgLayout,
           flex: 1,
           overflow: 'auto',
           height: 'calc(100vh - 56px)',
         }}>
           <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}><Spin size="large" /></div>}>
-            {selectedPageId ? (
-              <Editor pageId={selectedPageId} onPageDeleted={handlePageDeleted} canEdit={canEdit} />
+            {safePageId ? (
+              <Editor pageId={safePageId} onPageDeleted={handlePageDeleted} canEdit={canEdit} />
             ) : (
               <Dashboard />
             )}
