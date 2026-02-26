@@ -11,6 +11,8 @@ __pycache__/
 .venv/
 venv/
 *.egg-info/
+.coverage
+.pytest_cache/
 
 # Node
 node_modules/
@@ -30,3 +32,16 @@ dist/
 
 # Logs
 *.log
+
+# Agent (internal AI tooling)
+.agent/
+
+# Internal reports
+AUDIT_REPORT.md
+FIX_REPORT.md
+REVISOR_VERDICT.md
+registry.md
+
+# Scratch test files
+test_*.py
+backend/test_*.py
