@@ -128,6 +128,8 @@ const WikiApp: React.FC = () => {
     if (navigatingFromUrlRef.current || pendingSlugRef.current) return;
     selectedSlugRef.current = null;
     setSelectedPageId(null);
+    setFirstPageId(null); // Clear stale page from previous room
+    setTreeKey(prev => prev + 1); // Force tree to re-mount for new room
   }, [currentRoom]);
 
   // ═══ EFFECT 4: Auto-select topmost page or welcome page ═══
