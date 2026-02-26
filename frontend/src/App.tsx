@@ -122,14 +122,27 @@ const WikiApp: React.FC = () => {
     }
   }, [currentRoom]);
 
+  // Track previous room to distinguish initial set from actual switch
+  const prevRoomRef = React.useRef<string>('');
+
   // ═══ EFFECT 3: Reset page when room changes (user-driven only) ═══
   React.useEffect(() => {
     // Skip during URL-driven navigation to avoid killing the pending page
     if (navigatingFromUrlRef.current || pendingSlugRef.current) return;
-    selectedSlugRef.current = null;
-    setSelectedPageId(null);
-    setFirstPageId(null); // Clear stale page from previous room
-    setTreeKey(prev => prev + 1); // Force tree to re-mount for new room
+
+    const prevRoom = prevRoomRef.current;
+    prevRoomRef.current = currentRoom;
+
+    // Skip on initial room set ('' → first room) — tree hasn't loaded yet
+    if (!prevRoom) return;
+
+    // Only reset when actually switching between rooms
+    if (prevRoom !== currentRoom) {
+      selectedSlugRef.current = null;
+      setSelectedPageId(null);
+      setFirstPageId(null); // Clear stale page from previous room
+      setTreeKey(prev => prev + 1); // Force tree to re-mount for new room
+    }
   }, [currentRoom]);
 
   // ═══ EFFECT 4: Auto-select topmost page or welcome page ═══
